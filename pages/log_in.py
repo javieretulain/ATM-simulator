@@ -1,6 +1,9 @@
 import streamlit as st
 from auth import register_user, login_user
 
+if "user_id" in st.session_state:
+    st.switch_page("app.py")
+
 st.markdown(
     """
     <p style='font-size:22px; color:#391560; font-weight:bold; text-align:center;'>
@@ -19,7 +22,7 @@ def log_in():
         user = login_user(email, password)
 
         if user:
-            user_id, balance = user
+            user_id, _, balance = user
             st.session_state.user_id = user_id
             st.session_state.balance = balance
             st.success("Logged in successfully")
@@ -42,13 +45,12 @@ def sign_up():
             st.success("Account created successfully")
         else:
             st.error("Email already registered")
+
 col_spc1, col_btn1, col_spc2 = st.columns([3,1,3])
 col_spc3, col_btn2, col_spc4 = st.columns([3,1,3])
 
 with col_btn1:
-    if st.button("Log In"):
-        log_in()
+    st.button("Log In", on_click=log_in)
 
 with col_btn2:
-    if st.button("Sign Up"):
-        sign_up()
+    st.button("Sign Up", on_click=sign_up)

@@ -1,17 +1,21 @@
-import hashlib
+import bcrypt
 from database import get_connection
 
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+def hash_password(password: str) -> bytes:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
 
-def register_user(email: str, password: str):
+def check_password(password: str, hashed: bytes) -> bool:
+    return bcrypt.checkpw(password.encode("utf-8"), hashed)
+
+def register_user(email, password):
     conn = get_connection()
     cur = conn.cursor()
+    hashed = hash_password(password)
 
     try:
         cur.execute(
             "INSERT INTO users (email, password) VALUES (?, ?)",
-            (email, hash_password(password))
+            (email, hashed)
         )
         conn.commit()
         return True
@@ -20,15 +24,18 @@ def register_user(email: str, password: str):
     finally:
         conn.close()
 
-def login_user(email: str, password: str):
+def login_user(email, password):
     conn = get_connection()
     cur = conn.cursor()
 
     cur.execute(
-        "SELECT id, balance FROM users WHERE email=? AND password=?",
-        (email, hash_password(password))
+        "SELECT id, password, balance FROM users WHERE email=?",
+        (email,)
     )
-
     user = cur.fetchone()
     conn.close()
-    return user
+
+    if user and check_password(password, user[1]):
+        return user
+
+    return None
