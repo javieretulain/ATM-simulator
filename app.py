@@ -1,162 +1,180 @@
 import streamlit as st
 import pandas as pd
-from pathlib import Path
+from database import init_db, get_connection
 
-BASE_DIR = Path(__file__).parent
+init_db()
 
-def load_data():
-    data = {
-        "balance": 0,
-        "total_deposited": 0,
-        "total_withdrawn": 0
-    }
+if "user_id" not in st.session_state:
+    st.switch_page("pages/log_in.py")
 
-    try:
-        with open("data.txt", "r") as file:
-            for line in file:
-                key, value = line.strip().split("=")
-                data[key] = int(value)
-    except FileNotFoundError:
-        pass
+user_id = st.session_state.user_id
 
-    return data
+def get_user_data():
+    conn = get_connection()
+    cur = conn.cursor()
 
-def save_data(balance, total_dep, total_wit):
-    with open("data.txt", "w") as file:
-        file.write(f"balance={balance}\n")
-        file.write(f"total_deposited={total_dep}\n")
-        file.write(f"total_withdrawn={total_wit}\n")
+    cur.execute(
+        "SELECT balance FROM users WHERE id=?",
+        (user_id,)
+    )
+    balance = cur.fetchone()[0]
 
+    cur.execute(
+        "SELECT SUM(amount) FROM history WHERE user_id=? AND operation='DEPOSIT'",
+        (user_id,)
+    )
+    total_deposited = cur.fetchone()[0] or 0
 
-with open("balance.txt", "r", encoding="utf-8") as f:
-    st.session_state.balance = f.read()
+    cur.execute(
+        "SELECT SUM(amount) FROM history WHERE user_id=? AND operation='WITHDRAW'",
+        (user_id,)
+    )
+    total_withdrawn = cur.fetchone()[0] or 0
 
-if "show_history" not in st.session_state:
-    st.session_state.show_history = False
+    conn.close()
+    return balance, total_deposited, total_withdrawn
 
-with open("history.txt", "r", encoding="utf-8") as f:
-    history = f.read()
+def update_balance(new_balance):
+    conn = get_connection()
+    cur = conn.cursor()
 
-if "total_deposited" not in st.session_state:
-    st.session_state.total_deposited = 0
+    cur.execute(
+        "UPDATE users SET balance=? WHERE id=?",
+        (new_balance, user_id)
+    )
 
-if "total_withdrawn" not in st.session_state:
-    st.session_state.total_withdrawn = 0
+    conn.commit()
+    conn.close()
+
+def save_history(operation, amount, balance_after):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO history (user_id, operation, amount, balance_after)
+        VALUES (?, ?, ?, ?)
+        """,
+        (user_id, operation, amount, balance_after)
+    )
+
+    conn.commit()
+    conn.close()
+
+def get_history():
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT operation, amount, balance_after, created_at
+        FROM history
+        WHERE user_id=?
+        ORDER BY created_at DESC
+        """,
+        (user_id,)
+    )
+
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+def clean_history():
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        "DELETE FROM history WHERE user_id=?",
+        (user_id,)
+    )
+
+    conn.commit()
+    conn.close()
+
+balance, total_deposited, total_withdrawn = get_user_data()
 
 st.markdown(
     f"""
     <p style='font-size:22px; color:#391560; font-weight:bold; text-align:center;'>
-        Balance: {st.session_state.balance} $
+        Balance: ${balance}
     </p>
     """,
     unsafe_allow_html=True
 )
 
-money = st.number_input("Enter a number", min_value=0,step=1000)
-
-def save_history(text):
-    with open ("history.txt", "a") as file:
-        file.write(text + "\n")
-
-def see_history():
-    try:
-        with open ("history.txt", "r") as file:
-            content = file.read()
-        
-            if (content.strip() == ""):
-                st.error("There is not registred operations")
-            else:
-                st.code(content)
-    except FileNotFoundError:
-        st.info("History. There is not registred operations")
+money = st.number_input("Enter a number", min_value=0, step=1000)
 
 def deposit():
-    global money
-    
-    if (money == 0):
-        st.warning("Enter a valid number") 
-    else:
-        st.session_state.total_deposited += money
-        st.session_state.balance = int(st.session_state.balance) + money
-        save_data(st.session_state.balance, 
-                  st.session_state.total_deposited, 
-                  st.session_state.total_withdrawn)
-        save_history(f"DEPOSIT: +{money} | ACTUAL BALANCE: {st.session_state.balance}")
-        
+    if money == 0:
+        st.warning("Enter a valid number")
+        return
+
+    new_balance = balance + money
+    update_balance(new_balance)
+    save_history("DEPOSIT", money, new_balance)
+    st.success("Deposit successful")
+    st.rerun()
+
 def withdraw():
-    global money
-    if (money > int(st.session_state.balance)):
+    if money == 0:
+        st.warning("Enter a valid number")
+        return
+
+    if money > balance:
         st.warning("Not enough balance")
-    elif (money == 0):
-        st.warning("Enter a valid number")    
-    else:
-        st.session_state.balance = int(st.session_state.balance) - money
-        st.session_state.total_withdrawn += money
-        save_data(st.session_state.balance, 
-                  st.session_state.total_deposited, 
-                  st.session_state.total_withdrawn)
-        save_history(f"WITHDRAW: -{money} | ACTUAL BALANCE: {st.session_state.balance}")
+        return
 
-def save_balance(balance):
-    with open("balance.txt", "w") as file:
-        file.write(str(balance))
+    new_balance = balance - money
+    update_balance(new_balance)
+    save_history("WITHDRAW", money, new_balance)
+    st.success("Withdraw successful")
+    st.rerun()
 
-def clean_history():
-        open("history.txt", "w").close()
-        st.info("History successfully deleted")
- 
-if "initialized" not in st.session_state:
-    data = load_data()
-
-    st.session_state.balance = data["balance"]
-    st.session_state.total_deposited = data["total_deposited"]
-    st.session_state.total_withdrawn = data["total_withdrawn"]
-
-    st.session_state.initialized = True
-  
 col1, col2, col3, col4 = st.columns(4)
 
-with col1: 
+with col1:
     if st.button("Deposit"):
         deposit()
-        save_balance(st.session_state.balance)
 
 with col2:
     if st.button("Withdraw"):
         withdraw()
-        save_balance(st.session_state.balance) 
 
 with col3:
     if st.button("History"):
-        st.session_state.show_history = not st.session_state.show_history
-    
-if st.session_state.show_history:
-    see_history()
+        st.session_state.show_history = not st.session_state.get("show_history", False)
 
 with col4:
     if st.button("Clean history"):
         clean_history()
+        st.success("History deleted")
+        st.rerun()
+
+if st.session_state.get("show_history", False):
+    history = get_history()
+
+    if not history:
+        st.info("No registered operations")
+    else:
+        df_hist = pd.DataFrame(
+            history,
+            columns=["Operation", "Amount", "Balance After", "Date"]
+        )
+        st.dataframe(df_hist, use_container_width=True)
 
 col1_1, col2_1, col3_1 = st.columns(3)
 
 with col1_1:
-    st.metric("Current balance", f"${st.session_state.balance}")
-    
+    st.metric("Current balance", f"${balance}")
+
 with col2_1:
-    st.metric("Total deposited", f"${st.session_state.total_deposited}") 
-    
+    st.metric("Total deposited", f"${total_deposited}")
+
 with col3_1:
-    st.metric("Total withdrawn", f"${st.session_state.total_withdrawn}")
+    st.metric("Total withdrawn", f"${total_withdrawn}")
 
-data = {
-    "Metric": ["Balance", "Total Deposited", "Total Withdrawn"],
-    "Amount": [
-        st.session_state.balance,
-        st.session_state.total_deposited,
-        st.session_state.total_withdrawn
-    ]
-}
+df_chart = pd.DataFrame({
+    "Amount": [balance, total_deposited, total_withdrawn]
+}, index=["Balance", "Total Deposited", "Total Withdrawn"])
 
-df = pd.DataFrame(data).set_index("Metric")
-
-st.bar_chart(df)
+st.bar_chart(df_chart)
