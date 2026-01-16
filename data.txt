@@ -1,3 +1,0 @@
-balance=2000
-total_deposited=2000
-total_withdrawn=0
