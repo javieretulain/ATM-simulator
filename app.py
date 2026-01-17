@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import altair as alt
 from database import init_db, get_connection
 
 init_db()
@@ -11,8 +12,9 @@ user_id = st.session_state.user_id
 
 with st.sidebar:
     st.write("✅ Logged in")
+    st.write(f"User ID: {user_id}")
     if st.button("Logout"):
-        st.session_state.clear()
+        del st.session_state["user_id"]
         st.switch_page("pages/log_in.py")
 
 def get_user_data():
@@ -34,8 +36,20 @@ def get_user_data():
     )
     total_withdrawn = cur.fetchone()[0]
 
+    cur.execute(
+        "SELECT COALESCE(SUM(amount),0) FROM history WHERE user_id=? AND operation='TRANSFER IN'",
+        (user_id,)
+    )
+    total_transfers_in = cur.fetchone()[0]
+
+    cur.execute(
+        "SELECT COALESCE(SUM(amount),0) FROM history WHERE user_id=? AND operation='TRANSFER OUT'",
+        (user_id,)
+    )
+    total_transfers_out = cur.fetchone()[0]
+
     conn.close()
-    return balance, total_deposited, total_withdrawn
+    return balance, total_deposited, total_withdrawn, total_transfers_in, total_transfers_out
 
 def update_balance(new_balance):
     conn = get_connection()
@@ -83,7 +97,7 @@ def clean_history():
     conn.commit()
     conn.close()
 
-balance, total_deposited, total_withdrawn = get_user_data()
+balance, total_deposited, total_withdrawn, total_transfers_in, total_transfers_out = get_user_data()
 
 st.markdown(
     f"""
@@ -146,7 +160,7 @@ if st.session_state.get("show_history", False):
     else:
         st.info("No registered operations")
 
-col1_1, col2_1, col3_1 = st.columns(3)
+col1_1, col2_1, col3_1, col4_1, col5_1 = st.columns(5)
 
 with col1_1:
     st.metric("Current balance", f"${balance}")
@@ -154,10 +168,44 @@ with col2_1:
     st.metric("Total deposited", f"${total_deposited}")
 with col3_1:
     st.metric("Total withdrawn", f"${total_withdrawn}")
+with col4_1:
+    st.metric("Total transfers in", f"${total_transfers_in}")
+with col5_1:
+    st.metric("Total transfers out", f"${total_transfers_out}")
 
-df_chart = pd.DataFrame(
-    {"Amount": [balance, total_deposited, total_withdrawn]},
-    index=["Balance", "Total Deposited", "Total Withdrawn"]
+chart_df = pd.DataFrame({
+    "Category": [
+        "Balance",
+        "Total deposited",
+        "Total withdrawn",
+        "Total transfers in",
+        "Total transfers out"
+    ],
+    "Amount": [
+        balance,
+        total_deposited,
+        total_withdrawn,
+        total_transfers_in,
+        total_transfers_out
+    ]
+})
+
+chart = (
+    alt.Chart(chart_df)
+    .mark_bar()
+    .encode(
+        x=alt.X(
+            "Category:N",
+            sort=[
+                "Balance",
+                "Total deposited",
+                "Total withdrawn",
+                "Total transfers in",
+                "Total transfers out"
+            ]
+        ),
+        y="Amount:Q"
+    )
 )
 
-st.bar_chart(df_chart)
+st.altair_chart(chart, use_container_width=True)
