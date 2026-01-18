@@ -7,5 +7,6 @@ def get_connection():
         database=st.secrets["db_name"],
         user=st.secrets["db_user"],
         password=st.secrets["db_password"],
-        port=st.secrets["db_port"]
+        port=st.secrets["db_port"],
+        sslmode="require"
     )
