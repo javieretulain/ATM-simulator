@@ -34,7 +34,7 @@ def make_transfer():
     cur = conn.cursor()
 
     # Check if user has sufficient balance
-    cur.execute("SELECT balance FROM users WHERE id=?", (user_id,))
+    cur.execute("SELECT balance FROM users WHERE id=%s", (user_id,))
     current_balance = cur.fetchone()[0]
 
     if amount > current_balance:
@@ -44,9 +44,9 @@ def make_transfer():
 
     # Deduct amount from user's balance
     new_balance = current_balance - amount
-    cur.execute("UPDATE users SET balance=? WHERE id=?", (new_balance, user_id))
+    cur.execute("UPDATE users SET balance=%s WHERE id=%s", (new_balance, user_id))
     
-    cur.execute("SELECT balance FROM users WHERE id=?", (recipient_id,))
+    cur.execute("SELECT balance FROM users WHERE id=%s", (recipient_id,))
     row = cur.fetchone()
 
     if row is None:
@@ -58,7 +58,7 @@ def make_transfer():
     
     new_recipient_balance = recipient_balance + amount
     cur.execute(
-    "UPDATE users SET balance=? WHERE id=?",
+    "UPDATE users SET balance=%s WHERE id=%s",
     (new_recipient_balance, recipient_id)
     )
     
@@ -66,7 +66,7 @@ def make_transfer():
     cur.execute(
         """
         INSERT INTO history (user_id, operation, amount, balance_after)
-        VALUES (?, 'TRANSFER OUT', ?, ?)
+        VALUES (%s, 'TRANSFER OUT', %s, %s)
         """,
         (user_id, amount, new_balance)
     )
@@ -74,7 +74,7 @@ def make_transfer():
     cur.execute(
         """
         INSERT INTO history (user_id, operation, amount, balance_after)
-        VALUES (?, 'TRANSFER IN', ?, ?)
+        VALUES (%s, 'TRANSFER IN', %s, %s)
         """,
         (recipient_id, amount, new_recipient_balance)
     )
@@ -83,7 +83,6 @@ def make_transfer():
     conn.close()
 
     st.success(f"Successfully transferred {amount}. New balance is {new_balance}.")
-    st.session_state.balance = new_balance
 
 st.text_input("Enter the ID of the recipient", key="recipient_id")
 

@@ -10,16 +10,17 @@ def check_password(password: str, hashed: bytes) -> bool:
 def register_user(email, password):
     conn = get_connection()
     cur = conn.cursor()
-    hashed = hash_password(password)
+    hashed = hash_password(password).decode("utf-8")
 
     try:
         cur.execute(
-            "INSERT INTO users (email, password) VALUES (?, ?)",
+            "INSERT INTO users (email, password) VALUES (%s, %s)",
             (email, hashed)
         )
         conn.commit()
         return True
-    except:
+    except Exception as e:
+        print(e)
         return False
     finally:
         conn.close()
@@ -29,13 +30,15 @@ def login_user(email, password):
     cur = conn.cursor()
 
     cur.execute(
-        "SELECT id, password, balance FROM users WHERE email=?",
+        "SELECT id, password, balance FROM users WHERE email=%s",
         (email,)
     )
     user = cur.fetchone()
     conn.close()
-
-    if user and check_password(password, user[1]):
+    
+    stored_hash = user[1].encode("utf-8")
+    
+    if user and check_password(password, stored_hash):
         return user
-
+    
     return None

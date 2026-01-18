@@ -1,11 +1,9 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-from database import init_db, get_connection
+from database import get_connection
 
-init_db()
-
-if "user_id" not in st.session_state:
+if not st.session_state.get("user_id"):
     st.switch_page("pages/log_in.py")
 
 user_id = st.session_state.user_id
@@ -21,29 +19,32 @@ def get_user_data():
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT balance FROM users WHERE id=?", (user_id,))
-    balance = cur.fetchone()[0]
+    cur.execute("SELECT balance FROM users WHERE id=%s", (user_id,))
+    row = cur.fetchone()
+    if row is None:
+        return 0, 0, 0, 0, 0
+    balance = row[0]
 
     cur.execute(
-        "SELECT COALESCE(SUM(amount),0) FROM history WHERE user_id=? AND operation='DEPOSIT'",
+        "SELECT COALESCE(SUM(amount),0) FROM history WHERE user_id=%s AND operation='DEPOSIT'",
         (user_id,)
     )
     total_deposited = cur.fetchone()[0]
 
     cur.execute(
-        "SELECT COALESCE(SUM(amount),0) FROM history WHERE user_id=? AND operation='WITHDRAW'",
+        "SELECT COALESCE(SUM(amount),0) FROM history WHERE user_id=%s AND operation='WITHDRAW'",
         (user_id,)
     )
     total_withdrawn = cur.fetchone()[0]
 
     cur.execute(
-        "SELECT COALESCE(SUM(amount),0) FROM history WHERE user_id=? AND operation='TRANSFER IN'",
+        "SELECT COALESCE(SUM(amount),0) FROM history WHERE user_id=%s AND operation='TRANSFER IN'",
         (user_id,)
     )
     total_transfers_in = cur.fetchone()[0]
 
     cur.execute(
-        "SELECT COALESCE(SUM(amount),0) FROM history WHERE user_id=? AND operation='TRANSFER OUT'",
+        "SELECT COALESCE(SUM(amount),0) FROM history WHERE user_id=%s AND operation='TRANSFER OUT'",
         (user_id,)
     )
     total_transfers_out = cur.fetchone()[0]
@@ -55,7 +56,7 @@ def update_balance(new_balance):
     conn = get_connection()
     cur = conn.cursor()
     cur.execute(
-        "UPDATE users SET balance=? WHERE id=?",
+        "UPDATE users SET balance=%s WHERE id=%s",
         (new_balance, user_id)
     )
     conn.commit()
@@ -67,7 +68,7 @@ def save_history(operation, amount, balance_after):
     cur.execute(
         """
         INSERT INTO history (user_id, operation, amount, balance_after)
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
         """,
         (user_id, operation, amount, balance_after)
     )
@@ -81,7 +82,7 @@ def get_history():
         """
         SELECT operation, amount, balance_after, created_at
         FROM history
-        WHERE user_id=?
+        WHERE user_id=%s
         ORDER BY created_at DESC
         """,
         (user_id,)
@@ -93,7 +94,7 @@ def get_history():
 def clean_history():
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("DELETE FROM history WHERE user_id=?", (user_id,))
+    cur.execute("DELETE FROM history WHERE user_id=%s", (user_id,))
     conn.commit()
     conn.close()
 
