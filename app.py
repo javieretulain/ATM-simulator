@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 from database import get_connection
+import dotenv
 import psycopg2
 from dotenv import load_dotenv
 import os
