@@ -35,10 +35,13 @@ def login_user(email, password):
     )
     user = cur.fetchone()
     conn.close()
-    
+
+    if user is None:
+        return None
+
     stored_hash = user[1].encode("utf-8")
-    
-    if user and check_password(password, stored_hash):
+
+    if check_password(password, stored_hash):
         return user
-    
+
     return None
