@@ -125,7 +125,7 @@ def withdraw():
     save_history("WITHDRAW", money, new_balance)
     st.success("Withdraw successful")
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3 = st.columns(3)
 
 with col1:
     st.button("Deposit", on_click=deposit)
