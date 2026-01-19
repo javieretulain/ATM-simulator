@@ -91,13 +91,6 @@ def get_history():
     conn.close()
     return rows
 
-def clean_history():
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM history WHERE user_id=%s", (user_id,))
-    conn.commit()
-    conn.close()
-
 balance, total_deposited, total_withdrawn, total_transfers_in, total_transfers_out = get_user_data()
 
 st.markdown(
@@ -143,12 +136,6 @@ with col2:
 with col3:
     if st.button("History"):
         st.session_state.show_history = not st.session_state.get("show_history", False)
-
-with col4:
-    if st.button("Clean history"):
-        clean_history()
-        st.success("History deleted")
-        st.rerun()
 
 if st.session_state.get("show_history", False):
     history = get_history()
